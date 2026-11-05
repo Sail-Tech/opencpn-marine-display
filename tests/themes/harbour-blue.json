@@ -1,0 +1,27 @@
+{
+  "app": "Marine Display Theme Studio",
+  "display": {
+    "manufacturer": "Harbour Blue",
+    "colors": {
+      "chassis": "#1d3b53",
+      "bezel": "#0e2233",
+      "displayBackground": "#061826",
+      "primaryText": "#e8f4ff",
+      "secondaryText": "#8fb3cc",
+      "grid": "#1f4560",
+      "separator": "#2b5a7a",
+      "arrows": "#ffd166",
+      "arrowSecondary": "#06d6a0",
+      "port": "#ef476f",
+      "starboard": "#06d6a0",
+      "windPort": "#ef476f",
+      "windStarboard": "#06d6a0",
+      "windFace": "#0a2438",
+      "windTicks": "#6f9bb8",
+      "hull": "#ffd166",
+      "aisTarget": "#7fd1ff",
+      "aisDanger": "#ff5c5c",
+      "aisOwn": "#ffd166"
+    }
+  }
+}
