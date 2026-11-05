@@ -283,7 +283,9 @@ void Depth(Painter& p, const Palette& pl, const Data& d) {
   const std::vector<float>& h = d.depth_history;
   if (h.size() > 1) {
     float max = 15;
-    for (float v : h) max = std::fmax(max, v);
+    for (float v : h) {
+      if (v > max) max = v;
+    }
     max *= 1.1f;
     std::vector<Pt> pts;
     pts.push_back({x1 - (x1 - x0) * static_cast<float>(h.size() - 1) / 299.0f, y0});

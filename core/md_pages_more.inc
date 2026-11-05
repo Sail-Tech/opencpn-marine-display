@@ -519,7 +519,9 @@ void SogCog(Painter& p, const Palette& pl, const Data& d) {
   p.Text((d.position_ok ? Three(Shown(d, d.cog)) : std::string("---")) + " " + Ref(d), 488, 191, 25, c[PRIMARY_TEXT],
          Align::kRight);
   double peak = d.position_ok ? d.sog : 0;
-  for (float v : d.sog_history) peak = std::fmax(peak, v);
+  for (float v : d.sog_history) {
+    if (v > peak) peak = v;
+  }
   const double sog_max = std::fmax(10.0, std::ceil(peak / 5) * 5);
   for (int i = 0; i <= 2; ++i) {
     const double v = sog_max * i / 2;
@@ -571,9 +573,10 @@ void WindHistory(Painter& p, const Palette& pl, const Data& d) {
   // Direction: 40 degrees around the present one; speed: the range of the last ten minutes.
   const double dir_min = std::floor((twd - 20) / 10) * 10, dir_max = dir_min + 40;
   double lo = tws, hi = tws;
+  // Plain comparisons: GCC 12 for arm64 fails (internal error) to vectorise an fmin/fmax reduction here.
   for (float v : d.tws_history) {
-    lo = std::fmin(lo, v);
-    hi = std::fmax(hi, v);
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
   }
   double speed_min = std::fmax(0.0, std::floor(lo - 1)), speed_max = std::ceil(hi + 1);
   if (speed_max - speed_min < 3) speed_max = speed_min + 3;
