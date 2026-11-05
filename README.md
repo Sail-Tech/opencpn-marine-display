@@ -56,6 +56,13 @@ A quick local macOS library against an installed OpenCPN:
 WXDEPS=/path/to/macos_deps_universal ci/build-macos-local.sh --install
 ```
 
+A local macOS package for *Options → Plugins → Import plugin…* (universal, darwin-wx32); `--install`
+installs it as an import would:
+
+```bash
+WXDEPS=/path/to/macos_deps_universal DIST=dist ci/package-macos-local.sh [--install]
+```
+
 ## Licence
 
 GPL v2 or later (see `COPYING`).
