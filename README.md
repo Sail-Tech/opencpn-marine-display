@@ -65,4 +65,4 @@ WXDEPS=/path/to/macos_deps_universal DIST=dist ci/package-macos-local.sh [--inst
 
 ## Licence
 
-GPL v2 or later (see `COPYING`).
+GPL v3 or later (see `COPYING`).
