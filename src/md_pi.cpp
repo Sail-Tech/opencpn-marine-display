@@ -219,8 +219,9 @@ void MarineDisplayPi::BuildPanes() {
         .CaptionVisible(true)
         .Right()
         .Layer(1)
-        .Row(0)
-        .Position(i)
+        // Up to two panes in a column; three or four make two columns, so the screens keep their size.
+        .Row(settings_.pane_count > 2 ? i / 2 : 0)
+        .Position(settings_.pane_count > 2 ? i % 2 : i)
         .BestSize(pane->FromDIP(wxSize(340, settings_.compact ? 260 : 340)))
         .MinSize(pane->FromDIP(wxSize(180, 140)))
         .FloatingSize(pane->FromDIP(wxSize(360, 360)))
@@ -333,9 +334,6 @@ void MarineDisplayPi::Tick() {
     md::Combine(received_, fix_, leg_, Now(), kMaxAge, &data_);
     data_.demo = false;
     if (second) {
-      // Depth history, one sample a second.
-      if (data_.depth_ok) depth_history_.push_back(static_cast<float>(data_.depth));
-      if (depth_history_.size() > 300) depth_history_.erase(depth_history_.begin());
       // AIS targets with OpenCPN's own range, bearing, CPA and TCPA.
       data_.targets.clear();
       if (ArrayOfPlugIn_AIS_Targets* targets = GetAISTargetArray()) {
@@ -359,8 +357,9 @@ void MarineDisplayPi::Tick() {
         delete targets;
       }
     }
+    history_.Update(Now(), data_);
+    history_.Apply(&data_);
     data_.ais_ok = true;
-    data_.depth_history = depth_history_;
   }
   for (MdPane* pane : panes_) {
     if (pane->IsShownOnScreen()) pane->Redraw();

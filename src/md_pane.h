@@ -44,6 +44,7 @@ class MdPane : public wxPanel {
 
  private:
   void ShowCaption(const wxString& text);
+  void UpdateCaption();
   void ShowModeMenu();
 
   Host host_;
@@ -56,6 +57,7 @@ class MdPane : public wxPanel {
   std::vector<MdKey*> keys_list_;
   MdScreen* screen_ = nullptr;
   wxStaticText* caption_ = nullptr;
+  wxString caption_text_;  // Without the DEMO mark.
   wxPanel* keys_ = nullptr;
   wxString shown_title_;
 };

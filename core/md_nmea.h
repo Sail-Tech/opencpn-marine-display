@@ -28,6 +28,10 @@ struct Received {
   Stamped stw;               // VHW.
   Stamped depth;             // DPT (with its offset), DBT.
   Stamped btw, dtw, xte;     // RMB, from a GPS or plotter.
+  Stamped rudder;            // RSA, starboard positive.
+  Stamped pilot_true, pilot_mag;  // Heading to steer: APB, HSC.
+  Stamped pressure;          // XDR, MDA (hPa).
+  Stamped air_temp;          // XDR, MDA, MTA (Celsius).
 };
 
 // Reads one sentence ("$IIMWV,…*hh"). A sentence with a wrong checksum, or of
@@ -52,6 +56,10 @@ struct Leg {
 // computed from the apparent wind, the boat speed and the heading.
 void Combine(const Received& received, const Fix& fix, const Leg& leg, double now, double max_age,
              Data* data);
+
+// The tidal current from the boat's ground vector (cog, sog) and water vector
+// (heading, speed through water); fills tide_ok, tide_set and tide_drift.
+void ComputeTide(Data* data);
 
 // Apparent wind from the true wind and the boat speed, and the reverse.
 void TrueFromApparent(double awa, double aws, double boat, double* twa, double* tws);

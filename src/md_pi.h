@@ -12,6 +12,7 @@
 
 #include "config.h"
 #include "md_demo.h"
+#include "md_history.h"
 #include "md_nmea.h"
 #include "md_settings.h"
 #include "ocpn_plugin.h"
@@ -68,7 +69,7 @@ class MarineDisplayPi : public opencpn_plugin_118 {
   md::Leg leg_;
   md::Demo demo_;
   md::Data data_;
-  std::vector<float> depth_history_;
+  md::History history_;  // Of the received data (the demo keeps its own).
   std::vector<MdPane*> panes_;  // Children of OpenCPN's frame, managed by its wxAuiManager.
   wxTimer timer_;
 #ifdef MARINE_DISPLAY_UI_TEST

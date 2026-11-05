@@ -10,8 +10,12 @@
 
 namespace md {
 
-enum class Page { kWindQuad = 0, kSteer, kAis, kGps, kDepth };
-constexpr int kPageCount = 5;
+// In the order the keys step through them.
+enum class Page {
+  kWindQuad = 0, kSteer, kLaylines, kWindHistory, kWindPlot, kHighway, kSteering, kAutopilot,
+  kRudder, kTide, kAis, kGps, kSogCog, kDepth, kBarometer, kWeather
+};
+constexpr int kPageCount = 16;
 const char* PageName(Page page);   // "Wind Quad — apparent and true wind"
 const char* PageShort(Page page);  // "Wind Quad"
 const char* PageKey(Page page);    // "windquad", for the settings

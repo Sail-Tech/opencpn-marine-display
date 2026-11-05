@@ -4,12 +4,12 @@ set(OCPN_BETA_REPO "opencpn/marine-display-beta" CACHE STRING "Beta repository")
 set(OCPN_RELEASE_REPO "opencpn/marine-display-prod" CACHE STRING "Release repository")
 
 set(PKG_NAME marine_display_pi)
-set(PKG_VERSION 0.1.0)
+set(PKG_VERSION 0.2.0)
 set(PKG_PRERELEASE "")
 set(DISPLAY_NAME MarineDisplay)
 set(PLUGIN_API_NAME MarineDisplay)
 set(PKG_SUMMARY "Marine Display Theme Studio instrument pages in OpenCPN panes")
-set(PKG_DESCRIPTION [=[Shows the instrument pages of the Marine Display Theme Studio (wind quad, steer, AIS, GPS and depth) in one to four dockable OpenCPN panes, drawn from the NMEA 0183 data, position fix, active route and AIS targets OpenCPN receives. Themes exported from the Theme Studio (.json) are imported in the plugin's preferences; day, night, amber and mono modes follow OpenCPN's colour scheme. Includes demo data for trying the pages. An aid to situational awareness; not a navigation source.]=])
+set(PKG_DESCRIPTION [=[Shows the instrument pages of the Marine Display Theme Studio (wind quad, sail steer, laylines, wind history, highway, steering, autopilot, rudder, tide, AIS, GPS, SOG/COG, depth, barometer and weather) in one to four dockable OpenCPN panes, drawn from the NMEA 0183 data (wind, speed, heading, depth, rudder, autopilot, pressure, air temperature), position fix, active route and AIS targets OpenCPN receives. Themes exported from the Theme Studio (.json) are imported in the plugin's preferences; day, night, amber and mono modes follow OpenCPN's colour scheme. Includes demo data for trying the pages. An aid to situational awareness; not a navigation source.]=])
 set(PKG_AUTHOR "OpenCPN Marine Display contributors")
 set(PKG_IS_OPEN_SOURCE "yes")
 set(PKG_HOMEPAGE "https://github.com/Sail-Tech/opencpn-marine-display")
@@ -26,8 +26,11 @@ set(SRC
     core/md_nmea.cpp
     core/md_demo.h
     core/md_demo.cpp
+    core/md_history.h
+    core/md_history.cpp
     core/md_pages.h
     core/md_pages.cpp
+    core/md_pages_more.inc
     src/md_settings.h
     src/md_wxpainter.h
     src/md_wxpainter.cpp

@@ -188,7 +188,7 @@ MdPane::MdPane(wxWindow* parent, Host host, md::Page page, md::Mode mode, bool c
     const wchar_t* label;
     const char* key;
     const char* tip;
-  } keys[] = {{L"▦", "pages", "Pages"},
+  } keys[] = {{L"▦", "pages", "All pages"},
               {L"▲", "up", "Previous page"},
               {L"↵", "enter", "Enter (AIS: next target)"},
               {L"▼", "down", "Next page"},
@@ -231,6 +231,13 @@ void MdPane::SetCompact(bool compact) {
 }
 
 void MdPane::ShowCaption(const wxString& text) {
+  caption_text_ = text;
+  UpdateCaption();
+}
+
+// Simulated data is marked in the caption, so it is never taken for the boat's own.
+void MdPane::UpdateCaption() {
+  const wxString text = (host_.data().demo ? wxString(L"DEMO \u00b7 ") : wxString()) + caption_text_;
   if (caption_->GetLabel() != text) caption_->SetLabel(text);
 }
 
@@ -259,13 +266,16 @@ void MdPane::Key(const char* key) {
     SetMode(static_cast<md::Mode>((static_cast<int>(mode_) + 1) % md::kModeCount));
     ShowCaption(wxString("Display: ") + md::ModeName(mode_));
   } else if (k == "pages") {
-    wxString list;
+    // Every page in a list, to go straight to one.
+    wxMenu menu;
     for (int i = 0; i < md::kPageCount; ++i) {
-      if (i) list += L" · ";
-      if (i == page) list += L"● ";
-      list += md::PageShort(static_cast<md::Page>(i));
+      menu.AppendRadioItem(wxID_HIGHEST + 100 + i, wxString::FromUTF8(md::PageShort(static_cast<md::Page>(i))));
     }
-    ShowCaption(list);
+    menu.Check(wxID_HIGHEST + 100 + page, true);
+    const int id = GetPopupMenuSelectionFromUser(menu);
+    if (id < wxID_HIGHEST + 100 || id >= wxID_HIGHEST + 100 + md::kPageCount) return;
+    SetPage(static_cast<md::Page>(id - wxID_HIGHEST - 100));
+    if (host_.changed) host_.changed();
     return;
   }
   if (k == "up" || k == "down" || k == "menu") {
@@ -288,6 +298,7 @@ void MdPane::Redraw() {
   const md::Color edge = md::Mix(back, text_colour, 0.25);
   mode_key_->SetColours(back, text_colour, edge, palette.c[md::CHASSIS]);
   for (MdKey* key : keys_list_) key->SetColours(back, text_colour, edge, palette.c[md::CHASSIS]);
+  UpdateCaption();
   const wxString text = wxString::FromUTF8(host_.theme().title.c_str()).Upper();
   if (text != shown_title_) {
     brand_->SetLabel(text);
@@ -313,4 +324,9 @@ void MdPane::PaintScreen(wxWindow* screen) {
   gc->Clip(ox, oy, md::kPageWidth * k, md::kPageHeight * k);
   WxPainter painter(gc.get(), ox, oy, k);
   md::DrawPage(painter, palette, host_.data(), state_);
+  if (compact_ && host_.data().demo) {
+    // No caption in compact panes: mark simulated data on the screen.
+    painter.Rect(md::kPageWidth / 2 - 30, 0, 60, 16, palette.c[md::MENU], 3);
+    painter.Text("DEMO", md::kPageWidth / 2, 13, 12, palette.c[md::WARNING], md::Align::kCenter, true);
+  }
 }

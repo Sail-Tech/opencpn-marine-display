@@ -31,7 +31,21 @@ struct Data {
   bool waypoint_ok = false;       double btw = 0, dtw = 0, xte = 0;  // XTE: NM, left negative.
   std::string waypoint;
   bool ais_ok = false;            std::vector<AisTarget> targets;
-  std::vector<float> depth_history;  // One sample a second, oldest first, up to 300.
+  bool variation_ok = false;      double variation = 0;         // Magnetic variation, east positive.
+  // Autopilot: the heading it steers to (true) and the rudder angle (starboard positive).
+  // NMEA 0183 carries no pilot mode; pilot_mode/pilot_code are set only when known.
+  bool pilot_ok = false;          double pilot_course = 0;
+  bool rudder_ok = false;         double rudder = 0;
+  std::string pilot_mode, pilot_code, pilot_response;  // "NO DRIFT", "ND", "Low".
+  bool pressure_ok = false;       double pressure = 0;          // hPa (mb).
+  bool air_temp_ok = false;       double air_temp = 0;          // Degrees Celsius.
+  // Tidal current from the ground and water vectors: where it flows to (true) and its speed.
+  bool tide_ok = false;           double tide_set = 0, tide_drift = 0;
+  // Histories, oldest first (see md_history.h).
+  std::vector<float> depth_history;     // One a second, 5 minutes.
+  std::vector<float> sog_history, cog_history;  // One a second, 5 minutes.
+  std::vector<float> twd_history, tws_history;  // One every 2 seconds, 10 minutes.
+  std::vector<float> pressure_history;  // One a minute, 5 hours.
   bool demo = false;              // Simulated data.
 };
 

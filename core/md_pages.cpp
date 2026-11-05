@@ -10,12 +10,30 @@ namespace md {
 
 namespace {
 
-const char* const kNames[kPageCount] = {
-    "Wind Quad \xe2\x80\x94 apparent and true wind", "Sail Steer \xe2\x80\x94 heading, wind and waypoint",
-    "AIS \xe2\x80\x94 targets around the boat", "GPS \xe2\x80\x94 position, COG and SOG",
-    "Depth \xe2\x80\x94 now and last 5 minutes"};
-const char* const kShort[kPageCount] = {"Wind Quad", "Sail Steer", "AIS", "GPS", "Depth"};
-const char* const kKeys[kPageCount] = {"windquad", "steer", "ais", "gps", "depth"};
+struct PageInfo {
+  Page page;
+  const char* key;
+  const char* name;
+  const char* full;
+};
+// Indexed by Page.
+const PageInfo kPages[kPageCount] = {
+    {Page::kWindQuad, "windquad", "Wind Quad", "Wind Quad \xe2\x80\x94 apparent and true wind"},
+    {Page::kSteer, "steer", "Sail Steer", "Sail Steer \xe2\x80\x94 heading, wind and waypoint"},
+    {Page::kLaylines, "laylines", "Laylines", "Laylines \xe2\x80\x94 tacks on the true wind"},
+    {Page::kWindHistory, "windhistory", "Wind History", "Wind History \xe2\x80\x94 TWD and TWS, 10 minutes"},
+    {Page::kWindPlot, "windplot", "Wind plot", "Wind plot \xe2\x80\x94 TWD and TWS, 10 minutes"},
+    {Page::kHighway, "highway", "Highway", "Highway \xe2\x80\x94 course to the waypoint"},
+    {Page::kSteering, "steering", "Steering", "Steering \xe2\x80\x94 waypoint, XTE and COG"},
+    {Page::kAutopilot, "autopilot", "Autopilot", "Autopilot \xe2\x80\x94 set course"},
+    {Page::kRudder, "rudder", "Rudder", "Autopilot \xe2\x80\x94 rudder angle"},
+    {Page::kTide, "tide", "Tide", "Tide \xe2\x80\x94 current set and drift"},
+    {Page::kAis, "ais", "AIS", "AIS \xe2\x80\x94 targets around the boat"},
+    {Page::kGps, "gps", "GPS", "GPS \xe2\x80\x94 position, COG and SOG"},
+    {Page::kSogCog, "sogcog", "SOG / COG", "SOG / COG \xe2\x80\x94 last 5 minutes"},
+    {Page::kDepth, "depth", "Depth", "Depth \xe2\x80\x94 now and last 5 minutes"},
+    {Page::kBarometer, "barometer", "Barometer", "Barometer \xe2\x80\x94 last 5 hours"},
+    {Page::kWeather, "weather", "Weather", "Weather \xe2\x80\x94 pressure, air and wind, 3 hours"}};
 const char* const kDegree = "\xc2\xb0";
 
 std::string Fmt(const char* format, double v) {
@@ -268,9 +286,10 @@ void Depth(Painter& p, const Palette& pl, const Data& d) {
     for (float v : h) max = std::fmax(max, v);
     max *= 1.1f;
     std::vector<Pt> pts;
-    pts.push_back({x0, y0});
+    pts.push_back({x1 - (x1 - x0) * static_cast<float>(h.size() - 1) / 299.0f, y0});
     for (size_t i = 0; i < h.size(); ++i) {
-      pts.push_back({x0 + (x1 - x0) * static_cast<float>(i) / 299.0f, y0 + (y1 - y0) * h[i] / max});
+      const float age = static_cast<float>(h.size() - 1 - i);
+      pts.push_back({x1 - (x1 - x0) * age / 299.0f, y0 + (y1 - y0) * h[i] / max});
     }
     pts.push_back({pts.back().x, y0});
     p.Poly(pts.data(), static_cast<int>(pts.size()), Dim(c[ARROWS], 0.9));
@@ -279,16 +298,18 @@ void Depth(Painter& p, const Palette& pl, const Data& d) {
   p.Text("5 min", x0 + 6, y1 - 8, 13, c[SECONDARY_TEXT], Align::kLeft, false);
 }
 
+#include "md_pages_more.inc"
+
 }  // namespace
 
-const char* PageName(Page page) { return kNames[static_cast<int>(page)]; }
-const char* PageShort(Page page) { return kShort[static_cast<int>(page)]; }
-const char* PageKey(Page page) { return kKeys[static_cast<int>(page)]; }
+const char* PageName(Page page) { return kPages[static_cast<int>(page)].full; }
+const char* PageShort(Page page) { return kPages[static_cast<int>(page)].name; }
+const char* PageKey(Page page) { return kPages[static_cast<int>(page)].key; }
 
 bool PageFromKey(const char* key, Page* page) {
-  for (int i = 0; i < kPageCount; ++i) {
-    if (std::strcmp(key, kKeys[i]) == 0) {
-      *page = static_cast<Page>(i);
+  for (const PageInfo& info : kPages) {
+    if (std::strcmp(key, info.key) == 0) {
+      *page = info.page;
       return true;
     }
   }
@@ -302,10 +323,17 @@ void DrawPage(Painter& p, const Palette& palette, const Data& data, PageState& s
     case Page::kAis: Ais(p, palette, data, state); break;
     case Page::kGps: Gps(p, palette, data); break;
     case Page::kDepth: Depth(p, palette, data); break;
-  }
-  if (data.demo) {
-    // Bottom centre, the one spot free on every page.
-    p.Text("DEMO", kPageWidth / 2, kPageHeight - 4, 12, palette.c[WARNING], Align::kCenter);
+    case Page::kLaylines: Laylines(p, palette, data); break;
+    case Page::kWindHistory: WindHistory(p, palette, data); break;
+    case Page::kWindPlot: WindPlot(p, palette, data); break;
+    case Page::kHighway: Highway(p, palette, data); break;
+    case Page::kSteering: Steering(p, palette, data); break;
+    case Page::kAutopilot: Autopilot(p, palette, data); break;
+    case Page::kRudder: Rudder(p, palette, data); break;
+    case Page::kTide: Tide(p, palette, data); break;
+    case Page::kSogCog: SogCog(p, palette, data); break;
+    case Page::kBarometer: Barometer(p, palette, data); break;
+    case Page::kWeather: Weather(p, palette, data); break;
   }
 }
 

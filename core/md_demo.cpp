@@ -13,7 +13,21 @@ Demo::Demo()
                {235087396, "BOA VIAGEM", 0.8, -1.4, 20, 4.1},
                {244110321, "TEJO TRADER", -2.4, -0.6, 90, 9.8},
                {235114752, "PICA PICA", 1.5, 0.6, 0, 0}} {
-  for (int i = 0; i < 120; ++i) Step(1);
+  // Five hours of pressure and ten minutes of everything else, so the graphs start full.
+  for (int i = static_cast<int>(History::kSamples); i > 0; --i) {
+    history_.PushPressure(static_cast<float>(Pressure(-60.0 * i)));
+  }
+  for (int i = 0; i < 600; ++i) Step(1);
+}
+
+double Demo::Pressure(double t) { return 1006.2 + 0.9 * std::sin(t / 7200) + 0.15 * std::sin(t / 900); }
+
+// The ground vector: through the water at the heading, plus the current.
+void Demo::Ground(double* cog, double* sog) const {
+  const double x = bs_ * std::sin(hdg_ * kDeg) + drift_ * std::sin(set_ * kDeg);
+  const double y = bs_ * std::cos(hdg_ * kDeg) + drift_ * std::cos(set_ * kDeg);
+  *sog = std::hypot(x, y);
+  *cog = std::fmod(std::atan2(x, y) / kDeg + 360, 360);
 }
 
 double Demo::Random() {
@@ -24,16 +38,20 @@ double Demo::Random() {
 void Demo::Step(double dt) {
   t_ += dt;
   hdg_ = std::fmod(114 + 4 * std::sin(t_ / 9) + 1.5 * std::sin(t_ / 2.3) + 360, 360);
-  tws_ = 9.3 + 0.8 * std::sin(t_ / 7) + 0.4 * std::sin(t_ / 1.9);
-  twd_ = 172 + 3 * std::sin(t_ / 13);
-  bs_ = 6.2 + 0.25 * std::sin(t_ / 5);
-  const double sog = bs_ - 0.2, cog = std::fmod(hdg_ + 2, 360);
+  // Gusts and shifts of a few minutes, as the 10-minute wind graphs show them, plus a little flicker.
+  tws_ = 9.3 + 1.2 * std::sin(t_ * 2 * 3.14159265 / 240) + 0.15 * std::sin(t_ / 3);
+  twd_ = 172 + 4 * std::sin(t_ * 2 * 3.14159265 / 330) + 0.6 * std::sin(t_ / 7);
+  bs_ = 6.2 + 0.3 * std::sin(t_ * 2 * 3.14159265 / 240 - 0.6);
+  // The pilot holds the course; the rudder answers the heading error.
+  rudder_ = std::fmax(-35.0, std::fmin(35.0, std::round(2.2 * (std::fmod(course_ - hdg_ + 540, 360) - 180))));
+  pressure_ = Pressure(t_);
+  air_ = 20.7 + 0.2 * std::sin(t_ / 300);
+  double cog, sog;
+  Ground(&cog, &sog);
   const double nm = sog * dt / 3600;
   lat_ += nm * std::cos(cog * kDeg) / 60;
   lon_ += nm * std::sin(cog * kDeg) / 60 / std::cos(lat_ * kDeg);
   depth_ = std::fmax(2.2, depth_ + (Random() - 0.5) * 0.25 + 0.03 * std::sin(t_ / 11));
-  history_.push_back(static_cast<float>(depth_));
-  if (history_.size() > 300) history_.erase(history_.begin());
   btw_ = std::fmod(125 + 0.5 * std::sin(t_ / 17) + 360, 360);
   dtw_ = std::fmax(0.1, 2.4 - t_ * sog / 3600);
   xte_ = 0.05 + 0.03 * std::sin(t_ / 8);
@@ -48,6 +66,9 @@ void Demo::Step(double dt) {
       v.y = 3.2 * std::cos(a);
     }
   }
+  Data now;
+  Fill(&now);
+  history_.Update(t_, now);
 }
 
 void Demo::Fill(Data* d) const {
@@ -66,12 +87,25 @@ void Demo::Fill(Data* d) const {
   ApparentFromTrue(twa, tws_, bs_, &d->awa, &d->aws);
   d->depth_ok = true;
   d->depth = depth_;
-  d->depth_history = history_;
   d->position_ok = true;
   d->lat = lat_;
   d->lon = lon_;
-  d->sog = bs_ - 0.2;
-  d->cog = std::fmod(hdg_ + 2, 360);
+  Ground(&d->cog, &d->sog);
+  d->variation_ok = true;
+  d->variation = -0.5;
+  d->pilot_ok = true;
+  d->pilot_course = course_;
+  d->pilot_mode = "NO DRIFT";
+  d->pilot_code = "ND";
+  d->pilot_response = "Low";
+  d->rudder_ok = true;
+  d->rudder = rudder_;
+  d->pressure_ok = true;
+  d->pressure = pressure_;
+  d->air_temp_ok = true;
+  d->air_temp = air_;
+  ComputeTide(d);
+  history_.Apply(d);
   d->waypoint_ok = true;
   d->btw = btw_;
   d->dtw = dtw_;

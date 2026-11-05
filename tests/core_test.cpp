@@ -8,6 +8,7 @@
 #include <string>
 
 #include "md_demo.h"
+#include "md_history.h"
 #include "md_nmea.h"
 #include "md_pages.h"
 #include "md_theme.h"
@@ -107,12 +108,54 @@ int main() {
   Combine(Received(), fix, leg, 301, 10, &d);
   Check(d.position_ok && d.heading_ok && Near(d.hdg, 113, 1e-9) && d.waypoint_ok && d.waypoint == "WPT1", "fix and active leg");
 
+  // Autopilot, rudder, pressure and air temperature sentences.
+  Received q;
+  Check(ApplySentence("$IIRSA,-12.5,A,,V", 50, &q) && Near(q.rudder.v, -12.5, 1e-9), "RSA rudder to port");
+  Check(ApplySentence("$GPAPB,A,A,0.10,R,N,V,V,011,M,DEST,011,M,013,T", 50, &q) && Near(q.pilot_true.v, 13, 1e-9),
+        "APB heading to steer");
+  Check(ApplySentence("$IIHSC,,T,250.0,M", 50, &q) && Near(q.pilot_mag.v, 250, 1e-9), "HSC magnetic");
+  Check(ApplySentence("$WIXDR,P,1.0124,B,Barometer,C,19.5,C,AIR", 50, &q) && Near(q.pressure.v, 1012.4, 1e-6) &&
+            Near(q.air_temp.v, 19.5, 1e-9),
+        "XDR pressure and air temperature");
+  Check(!ApplySentence("$IIXDR,C,55.0,C,ENGINE", 50, &q) && Near(q.air_temp.v, 19.5, 1e-9), "XDR engine temperature ignored");
+  Check(ApplySentence("$WIMDA,29.92,I,1.0132,B,21.0,C,,,,,,,,,,,,,,", 50, &q) && Near(q.pressure.v, 1013.2, 1e-6) &&
+            Near(q.air_temp.v, 21, 1e-9),
+        "MDA pressure and air");
+  Check(ApplySentence("$IIMTA,22.5,C", 50, &q) && Near(q.air_temp.v, 22.5, 1e-9), "MTA air");
+  Data pd;
+  Fix pf;
+  pf.ok = true; pf.t = 50; pf.lat = 50; pf.lon = -1; pf.cog = 90; pf.sog = 6; pf.hdt = 80; pf.variation = -2;
+  q.stw.Set(5.5, 50);
+  Combine(q, pf, Leg(), 51, 10, &pd);
+  Check(pd.rudder_ok && pd.pressure_ok && pd.air_temp_ok && pd.pilot_ok && Near(pd.pilot_course, 13, 1e-9),
+        "rudder, pressure, air and pilot combined");
+  Check(pd.variation_ok && Near(pd.variation, -2, 1e-9), "variation from the fix");
+  // Ground 6 kn at 090, water 5.5 kn at 080: about 1.1 kn of current to the south-east.
+  Check(pd.tide_ok && Near(pd.tide_drift, 1.1, 0.1) && pd.tide_set > 120 && pd.tide_set < 160,
+        "tide from ground and water vectors, got " + std::to_string(pd.tide_drift) + " kn to " + std::to_string(pd.tide_set));
+
+  // Histories: one depth/SOG sample a second, wind every 2 s, pressure every minute.
+  History hist;
+  Data hd;
+  hd.depth_ok = hd.position_ok = hd.true_ok = hd.heading_ok = hd.pressure_ok = true;
+  hd.depth = 5; hd.sog = 4; hd.cog = 10; hd.twd = 200; hd.tws = 12; hd.pressure = 1010;
+  for (int i = 0; i < 700; ++i) hist.Update(i * 0.5, hd);
+  hist.Apply(&hd);
+  Check(hd.depth_history.size() == 300 && hd.sog_history.size() == 300 && hd.twd_history.size() == 175 &&
+            hd.pressure_history.size() == 6,
+        "history cadences, got " + std::to_string(hd.twd_history.size()) + " wind / " +
+            std::to_string(hd.pressure_history.size()) + " pressure");
+
   // Every page, with demo data and with nothing known, in every mode.
   Demo demo;
   demo.Step(5);
   Data full;
   demo.Fill(&full);
   Check(full.demo && full.ais_ok && full.targets.size() == 5 && !full.depth_history.empty(), "demo data");
+  Check(full.pressure_history.size() == 300 && full.twd_history.size() >= 299 && full.sog_history.size() == 300,
+        "demo histories start full");
+  Check(full.tide_ok && Near(full.tide_drift, 0.8, 0.01) && full.pilot_ok && full.rudder_ok && full.pilot_code == "ND",
+        "demo tide and autopilot");
   Data empty;
   for (int mode = 0; mode < kModeCount; ++mode) {
     for (int page = 0; page < kPageCount; ++page) {

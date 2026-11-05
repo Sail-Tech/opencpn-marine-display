@@ -192,11 +192,81 @@ bool ApplySentence(const std::string& sentence, double now, Received* r) {
     if (std::isfinite(xte)) r->xte.Set(F(f, 3) == "R" ? -xte : xte, now);
     return true;
   }
+  if (type == "RSA") {
+    // RSA,starboard (or single) rudder,A,port rudder,A; negative turns to port.
+    const double a = Number(F(f, 1));
+    if (!std::isfinite(a) || F(f, 2) != "A") return false;
+    r->rudder.Set(a, now);
+    return true;
+  }
+  if (type == "APB") {
+    // APB,…,13 heading to steer to the destination,14 M|T
+    const double h = Number(F(f, 13));
+    if (!std::isfinite(h)) return false;
+    (F(f, 14) == "M" ? r->pilot_mag : r->pilot_true).Set(Norm360(h), now);
+    return true;
+  }
+  if (type == "HSC") {
+    // HSC,heading true,T,heading magnetic,M
+    const double t = Number(F(f, 1)), m = Number(F(f, 3));
+    if (std::isfinite(t)) r->pilot_true.Set(Norm360(t), now);
+    if (std::isfinite(m)) r->pilot_mag.Set(Norm360(m), now);
+    return std::isfinite(t) || std::isfinite(m);
+  }
+  if (type == "MDA") {
+    // MDA,pressure inches,I,pressure bars,B,air temp,C,water temp,C,…
+    bool any = false;
+    double bars = Number(F(f, 3));
+    if (!std::isfinite(bars)) bars = Number(F(f, 1)) * 0.0338639;
+    if (std::isfinite(bars) && bars > 0.8 && bars < 1.2) {
+      r->pressure.Set(bars * 1000, now);
+      any = true;
+    }
+    const double air = Number(F(f, 5));
+    if (std::isfinite(air) && F(f, 6) == "C") {
+      r->air_temp.Set(air, now);
+      any = true;
+    }
+    return any;
+  }
+  if (type == "MTA") {
+    const double air = Number(F(f, 1));
+    if (!std::isfinite(air) || F(f, 2) != "C") return false;
+    r->air_temp.Set(air, now);
+    return true;
+  }
+  if (type == "XDR") {
+    // XDR,(type,value,unit,name)…: P = pressure (B bar, P pascal), C = temperature.
+    bool any = false;
+    for (size_t i = 1; i + 2 < f.size(); i += 4) {
+      const double v = Number(F(f, i + 1));
+      if (!std::isfinite(v)) continue;
+      std::string name = F(f, i + 3);
+      for (char& ch : name) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+      if (F(f, i) == "P") {
+        const double hpa = F(f, i + 2) == "B" ? v * 1000 : F(f, i + 2) == "P" ? v / 100 : NAN;
+        if (std::isfinite(hpa) && hpa > 800 && hpa < 1200) {
+          r->pressure.Set(hpa, now);
+          any = true;
+        }
+      } else if (F(f, i) == "C" && F(f, i + 2) == "C" &&
+                 (name.empty() || name.find("AIR") != std::string::npos ||
+                  name.find("OUTSIDE") != std::string::npos)) {
+        r->air_temp.Set(v, now);
+        any = true;
+      }
+    }
+    return any;
+  }
   return false;
 }
 
 void Combine(const Received& r, const Fix& fix, const Leg& leg, double now, double max_age, Data* d) {
   const bool fix_fresh = fix.ok && now - fix.t <= max_age;
+  // NMEA 0183 has no autopilot mode; only the demo sets these.
+  d->pilot_mode.clear();
+  d->pilot_code.clear();
+  d->pilot_response.clear();
   const auto fresh = [&](const Stamped& s) { return s.Fresh(now, max_age); };
 
   // Heading: OpenCPN's true heading, a true heading sentence, else magnetic plus variation.
@@ -255,6 +325,20 @@ void Combine(const Received& r, const Fix& fix, const Leg& leg, double now, doub
   d->depth_ok = fresh(r.depth);
   if (d->depth_ok) d->depth = r.depth.v;
 
+  d->variation_ok = std::isfinite(variation);
+  d->variation = d->variation_ok ? variation : 0;
+  d->pilot_ok = true;
+  if (fresh(r.pilot_true)) d->pilot_course = r.pilot_true.v;
+  else if (fresh(r.pilot_mag) && d->variation_ok) d->pilot_course = Norm360(r.pilot_mag.v + variation);
+  else d->pilot_ok = false;
+  d->rudder_ok = fresh(r.rudder);
+  if (d->rudder_ok) d->rudder = r.rudder.v;
+  d->pressure_ok = fresh(r.pressure);
+  if (d->pressure_ok) d->pressure = r.pressure.v;
+  d->air_temp_ok = fresh(r.air_temp);
+  if (d->air_temp_ok) d->air_temp = r.air_temp.v;
+  ComputeTide(d);
+
   if (leg.ok && now - leg.t <= max_age && std::isfinite(leg.btw) && std::isfinite(leg.dtw)) {
     d->waypoint_ok = true;
     d->btw = leg.btw;
@@ -270,6 +354,16 @@ void Combine(const Received& r, const Fix& fix, const Leg& leg, double now, doub
   } else {
     d->waypoint_ok = false;
   }
+}
+
+void ComputeTide(Data* d) {
+  d->tide_ok = d->position_ok && d->stw_ok && d->heading_ok;
+  if (!d->tide_ok) return;
+  const double gx = d->sog * std::sin(d->cog * kDeg), gy = d->sog * std::cos(d->cog * kDeg);
+  const double wx = d->stw * std::sin(d->hdg * kDeg), wy = d->stw * std::cos(d->hdg * kDeg);
+  const double cx = gx - wx, cy = gy - wy;
+  d->tide_drift = std::hypot(cx, cy);
+  d->tide_set = d->tide_drift > 1e-6 ? Norm360(std::atan2(cx, cy) / kDeg) : 0;
 }
 
 }  // namespace md
