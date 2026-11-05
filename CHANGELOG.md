@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+- Packages for more Linux systems. OpenCPN refused the Debian 12 package on Ubuntu 22.04 and Linux
+  Mint 21 ("Incompatible import plugin detected"): OpenCPN 5.14 there accepts only ubuntu-x86_64 22.04
+  packages. New: Ubuntu 22.04 / Mint 21 (x86_64, arm64, armhf), Ubuntu 26.04 (x86_64, arm64),
+  Debian 13 x86_64 and Flatpak (OpenCPN from Flathub, runtime 25.08, x86_64 and aarch64, also for
+  Raspberry Pi OS 64-bit). Ubuntu 24.04 / Mint 22 keeps using the Debian 12 package.
+- No change to the plugin itself.
+
 ## 0.2.0
 
 - Eleven more Theme Studio views: Laylines, Wind History, Wind plot, Highway, Steering, Autopilot (set

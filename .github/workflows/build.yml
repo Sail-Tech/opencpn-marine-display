@@ -9,65 +9,109 @@ permissions:
   contents: read
 
 jobs:
-  linux-x86_64:
-    runs-on: ubuntu-24.04
-    container: debian:12
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install build dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends cmake g++ make gettext libwxgtk3.2-dev libcurl4-openssl-dev libgl1-mesa-dev libglu1-mesa-dev file ca-certificates
-      - name: Build import tarball
-        run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release '-DOCPN_TARGET_TUPLE=debian-x86_64;12;x86_64'
-          cmake --build build --target tarball --parallel 2
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MarineDisplay-Linux-x86_64
-          path: |
-            build/*.tar.gz
-            build/*.xml
-            build/*.sha256
-
-  raspberry-pi:
-    # Raspberry Pi OS (Pi 3 and later), 32-bit (armhf) and 64-bit (arm64), on Bookworm
-    # (Debian 12) and Trixie (Debian 13). OpenCPN accepts a debian-* package only when
-    # its Debian major version is the host's, so each release needs its own package.
+  linux:
+    # OpenCPN accepts a package when its target is the host's: a debian-* package
+    # needs the host's Debian major version. On Ubuntu and Linux Mint, OpenCPN
+    # 5.14 (PPA) takes debian-*-12 on Ubuntu 24.04 (Mint 22) but only ubuntu-*
+    # packages of the exact release on 22.04 (Mint 21) and 26.04 (its compat OS
+    # defaults to the build target, so the 22.04 wx32 mapping is never used).
+    # Raspberry Pi OS (Pi 3 and later) is Debian 12 (Bookworm) or 13 (Trixie),
+    # 32-bit (armhf) or 64-bit (arm64).
     # arm64 builds natively on an Arm runner; armhf runs under QEMU on x86-64.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { debian: 12, arch: armhf, platform: linux/arm/v7, runner: ubuntu-24.04 }
-          - { debian: 12, arch: arm64, platform: linux/arm64, runner: ubuntu-24.04-arm }
-          - { debian: 13, arch: armhf, platform: linux/arm/v7, runner: ubuntu-24.04 }
-          - { debian: 13, arch: arm64, platform: linux/arm64, runner: ubuntu-24.04-arm }
+          - { name: Linux-debian12-x86_64, image: "debian:12", tuple: "debian-x86_64;12;x86_64", platform: linux/amd64, runner: ubuntu-24.04 }
+          - { name: Linux-debian13-x86_64, image: "debian:13", tuple: "debian-x86_64;13;x86_64", platform: linux/amd64, runner: ubuntu-24.04 }
+          - { name: Linux-ubuntu2204-x86_64, image: "ubuntu:22.04", ppa: true, tuple: "ubuntu-x86_64;22.04;x86_64", platform: linux/amd64, runner: ubuntu-24.04 }
+          - { name: Linux-ubuntu2204-arm64, image: "ubuntu:22.04", ppa: true, tuple: "ubuntu-arm64;22.04;arm64", platform: linux/arm64, runner: ubuntu-24.04-arm }
+          - { name: Linux-ubuntu2204-armhf, image: "ubuntu:22.04", ppa: true, tuple: "ubuntu-armhf;22.04;armhf", platform: linux/arm/v7, runner: ubuntu-24.04 }
+          - { name: Linux-ubuntu2604-x86_64, image: "ubuntu:26.04", tuple: "ubuntu-x86_64;26.04;x86_64", platform: linux/amd64, runner: ubuntu-24.04 }
+          - { name: Linux-ubuntu2604-arm64, image: "ubuntu:26.04", tuple: "ubuntu-arm64;26.04;arm64", platform: linux/arm64, runner: ubuntu-24.04-arm }
+          - { name: RaspberryPi-debian12-armhf, image: "debian:12", tuple: "debian-armhf;12;armhf", platform: linux/arm/v7, runner: ubuntu-24.04 }
+          - { name: RaspberryPi-debian12-arm64, image: "debian:12", tuple: "debian-arm64;12;arm64", platform: linux/arm64, runner: ubuntu-24.04-arm }
+          - { name: RaspberryPi-debian13-armhf, image: "debian:13", tuple: "debian-armhf;13;armhf", platform: linux/arm/v7, runner: ubuntu-24.04 }
+          - { name: RaspberryPi-debian13-arm64, image: "debian:13", tuple: "debian-arm64;13;arm64", platform: linux/arm64, runner: ubuntu-24.04-arm }
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - if: matrix.arch == 'armhf'
+      - if: matrix.platform == 'linux/arm/v7'
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm
       - name: Build import tarball
         run: |
           docker run --rm --platform ${{ matrix.platform }} \
-            -e GITHUB_RUN_NUMBER -e GITHUB_RUN_ID \
-            -v "$PWD:/src" -w /src debian:${{ matrix.debian }} bash -ec '
+            -e GITHUB_RUN_NUMBER -e GITHUB_RUN_ID -e PPA=${{ matrix.ppa && '1' || '' }} \
+            -v "$PWD:/src" -w /src ${{ matrix.image }} bash -ec '
+              export DEBIAN_FRONTEND=noninteractive
               apt-get update
-              apt-get install -y --no-install-recommends cmake g++ make gettext git libwxgtk3.2-dev libcurl4-openssl-dev libgl1-mesa-dev libglu1-mesa-dev file ca-certificates
+              if [ -n "$PPA" ]; then
+                # Ubuntu 22.04 has wxWidgets 3.0; OpenCPN 5.8+ there uses 3.2 from its PPA.
+                apt-get install -y --no-install-recommends software-properties-common gpg-agent
+                add-apt-repository -y ppa:opencpn/opencpn
+                apt-get update
+              fi
+              apt-get install -y --no-install-recommends cmake g++ make gettext git libwxgtk3.2-dev libgl1-mesa-dev libglu1-mesa-dev file ca-certificates
               git config --global --add safe.directory /src
-              cmake -S . -B build -DCMAKE_BUILD_TYPE=Release "-DOCPN_TARGET_TUPLE=debian-${{ matrix.arch }};${{ matrix.debian }};${{ matrix.arch }}"
+              cmake -S . -B build -DCMAKE_BUILD_TYPE=Release "-DOCPN_TARGET_TUPLE=${{ matrix.tuple }}"
               cmake --build build --target tarball --parallel $(nproc)
-              find build -name "*.so" -path "*lib/opencpn*" -exec file {} +'
+              find build -name "*.so" -path "*lib/opencpn*" -exec file {} +
+              grep -h -E "<target>|<target-version>" build/*.xml
+              case "${{ matrix.tuple }}" in *";13;"*)
+                # Debian 13 own OpenCPN 5.10.2 reports its version as n/a and refuses
+                # 13 (5.14 from trixie-backports takes 13): the same files marked n/a.
+                T=$(ls build/*.tar.gz); D=$(mktemp -d)
+                tar -xzf "$T" -C "$D"
+                sed -i "s|<target-version>13</target-version>|<target-version>n/a</target-version>|" "$D"/*/metadata.xml
+                grep -q "<target-version>n/a</target-version>" "$D"/*/metadata.xml
+                (cd "$D" && tar -czf "/src/${T%.tar.gz}-opencpn5.10.tar.gz" *)
+                ls -l build/*.tar.gz;;
+              esac'
       - uses: actions/upload-artifact@v4
         with:
-          name: MarineDisplay-RaspberryPi-debian${{ matrix.debian }}-${{ matrix.arch }}
+          name: MarineDisplay-${{ matrix.name }}
           path: |
             build/*.tar.gz
             build/*.xml
             build/*.sha256
+
+  flatpak:
+    # OpenCPN from Flathub (any Linux, also Raspberry Pi OS 64-bit); 5.14 runs on the
+    # 25.08 runtime and accepts only flatpak-* packages of that runtime.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install flatpak-builder, the SDK and OpenCPN
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder cmake gettext
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Sdk//25.08 org.opencpn.OpenCPN
+          flatpak info --user org.opencpn.OpenCPN | grep -E "Version|Runtime"
+      - name: Build import tarball
+        run: |
+          sed -i '/^sdk:/s|//.*|//25.08|' flatpak/org.opencpn.OpenCPN.Plugin.*.yaml
+          mkdir build-flatpak
+          cd build-flatpak
+          cmake -DCMAKE_BUILD_TYPE=Release "-DOCPN_TARGET_TUPLE=flatpak-${{ matrix.arch }};25.08;${{ matrix.arch }}" ..
+          make -j 1 flatpak
+          ls -l *.tar.gz *.xml
+          grep -h -E "<target>|<target-version>" *.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MarineDisplay-Flatpak-${{ matrix.arch }}
+          path: |
+            build-flatpak/*.tar.gz
+            build-flatpak/*.xml
+            build-flatpak/*.sha256
 
   windows:
     # build-windows.bat uses the Visual Studio 2022 generator. x64 is for the

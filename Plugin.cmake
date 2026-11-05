@@ -4,7 +4,7 @@ set(OCPN_BETA_REPO "opencpn/marine-display-beta" CACHE STRING "Beta repository")
 set(OCPN_RELEASE_REPO "opencpn/marine-display-prod" CACHE STRING "Release repository")
 
 set(PKG_NAME marine_display_pi)
-set(PKG_VERSION 0.2.0)
+set(PKG_VERSION 0.2.1)
 set(PKG_PRERELEASE "")
 set(DISPLAY_NAME MarineDisplay)
 set(PLUGIN_API_NAME MarineDisplay)
